@@ -1,55 +1,23 @@
 import { SharedProtocol, ISharedProtocol } from '../models/SharedProtocol';
 import { PioneerService } from './PioneerService';
 import { NotificationService } from './NotificationService';
+import { getAddress } from '@ethersproject/address';
+import mongoose from 'mongoose';
+import { telegramBot } from '../config/telegram';
+
+type Severity = 'info' | 'medium' | 'high';
+
+interface ProtocolChange {
+  type: string;
+  message: string;
+  severity: Severity;
+}
 
 export class SharedProtocolService {
   constructor(
     private pioneerService: PioneerService,
     private notificationService: NotificationService
   ) {}
-
-  async recordProtocolInteraction(
-    protocolAddress: string,
-    protocolName: string,
-    pioneerAddress: string,
-    success: boolean,
-    relatedTokens: string[] = []
-  ): Promise<ISharedProtocol> {
-    let protocol = await SharedProtocol.findOne({ protocolAddress });
-    const now = new Date();
-
-    if (!protocol) {
-      protocol = new SharedProtocol({
-        protocolAddress,
-        protocolName,
-        discoveryTimestamp: now,
-        lastActivity: now,
-        relatedTokens
-      });
-
-      // Notify about new protocol discovery
-      await this.notificationService.sendProtocolDiscoveryNotification({
-        protocolName,
-        protocolAddress,
-        pioneerAddress,
-        timestamp: now
-      });
-    }
-
-    // Update protocol metrics
-    protocol.updatePioneerMetrics(pioneerAddress, success);
-    protocol.relatedTokens = [...new Set([...protocol.relatedTokens, ...relatedTokens])];
-    
-    // Calculate new risk score
-    protocol.calculateRiskScore();
-
-    await protocol.save();
-
-    // Check for significant pattern changes
-    await this.analyzeProtocolPatterns(protocol);
-
-    return protocol;
-  }
 
   async getSharedProtocols(
     pioneerAddress: string,
@@ -65,77 +33,58 @@ export class SharedProtocolService {
       sortOrder?: 1 | -1;
     } = {}
   ) {
-    const query = {
-      'pioneers.address': pioneerAddress
-    };
+    try {
+      // Use getAddress for validation
+      getAddress(pioneerAddress);
+    } catch (error) {
+      throw new Error('Invalid pioneer address format');
+    }
 
-    const protocols = await SharedProtocol.find(query)
-      .sort({ [sortBy]: sortOrder })
+    // Validate sorting parameters
+    const validSortFields = ['lastActivity', 'totalPioneers', 'avgSuccessRate', 'riskScore'];
+    if (!validSortFields.includes(sortBy)) {
+      throw new Error('Invalid sort field');
+    }
+
+    const sortOptions: { [key: string]: 1 | -1 } = {};
+    sortOptions[sortBy] = sortOrder;
+
+    return SharedProtocol.find({
+      'pioneers.address': pioneerAddress.toLowerCase()
+    })
+      .sort(sortOptions)
       .skip(offset)
-      .limit(limit);
-
-    const total = await SharedProtocol.countDocuments(query);
-
-    return {
-      protocols,
-      total,
-      hasMore: offset + protocols.length < total
-    };
+      .limit(Math.min(limit, 100)); // Prevent excessive queries
   }
 
-  async findRelatedPioneers(protocolAddress: string) {
-    const protocol = await SharedProtocol.findOne({ protocolAddress });
-    if (!protocol) return [];
-
-    const pioneers = await Promise.all(
-      protocol.pioneers.map(async p => {
-        const metrics = await this.pioneerService.getPioneerMetrics(p.address);
-        return {
-          address: p.address,
-          metrics,
-          protocolInteractions: {
-            firstInteraction: p.firstInteraction,
-            lastInteraction: p.lastInteraction,
-            interactionCount: p.interactionCount,
-            successRate: p.successRate
-          }
-        };
-      })
-    );
-
-    return pioneers.sort((a, b) => 
-      b.protocolInteractions.successRate - a.protocolInteractions.successRate
-    );
-  }
-
-  async getProtocolTrends(timeframe: '24h' | '7d' | '30d' = '7d') {
-    const now = new Date();
+  async getProtocolTrends(timeframe: '24h' | '7d' | '30d' = '7d'): Promise<Array<{
+    protocolAddress: string;
+    protocolName: string;
+    riskScore: number;
+    tvlTrend: Array<{ timestamp: Date; value: number }>;
+  }>> {
     const timeframes = {
       '24h': 24 * 60 * 60 * 1000,
       '7d': 7 * 24 * 60 * 60 * 1000,
       '30d': 30 * 24 * 60 * 60 * 1000
     };
 
-    const minTimestamp = new Date(now.getTime() - timeframes[timeframe]);
+    const minTimestamp = new Date(Date.now() - timeframes[timeframe]);
 
     const protocols = await SharedProtocol.find({
       lastActivity: { $gte: minTimestamp }
-    })
-    .sort({ 'pioneers.length': -1, avgSuccessRate: -1 })
-    .limit(10);
+    }).select('protocolAddress protocolName riskScore tvlTrend');
 
     return protocols.map(protocol => ({
       protocolAddress: protocol.protocolAddress,
       protocolName: protocol.protocolName,
-      pioneerCount: protocol.totalPioneers,
-      avgSuccessRate: protocol.avgSuccessRate,
       riskScore: protocol.riskScore,
       tvlTrend: protocol.tvlTrend.filter(t => t.timestamp >= minTimestamp)
     }));
   }
 
   private async analyzeProtocolPatterns(protocol: ISharedProtocol) {
-    const significantChanges = [];
+    const significantChanges: ProtocolChange[] = [];
     const recentPioneers = protocol.pioneers.filter(
       p => p.lastInteraction.getTime() > Date.now() - 24 * 60 * 60 * 1000
     );
@@ -186,5 +135,5 @@ export class SharedProtocolService {
 
 export const sharedProtocolService = new SharedProtocolService(
   new PioneerService(),
-  new NotificationService()
+  new NotificationService(telegramBot)
 );

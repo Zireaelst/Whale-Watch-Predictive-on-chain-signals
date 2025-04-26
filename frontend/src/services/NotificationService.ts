@@ -37,7 +37,6 @@ class NotificationService {
     const stored = this.getStoredNotifications();
     stored.unshift(notification);
     
-    // Keep only the latest MAX_STORED_NOTIFICATIONS
     if (stored.length > MAX_STORED_NOTIFICATIONS) {
       stored.length = MAX_STORED_NOTIFICATIONS;
     }
@@ -63,39 +62,41 @@ class NotificationService {
       signal,
     };
 
-    // Store the notification
     this.storeNotification(notification);
 
     notificationQueue.add({
       id: signal.id,
+      title: notification.title,
+      message: notification.message,
+      type: signal.type as any,
+      timestamp: Date.now(),
       priority: signal.priority,
-      execute: async () => {
-        // Handle desktop notifications
-        if (this.hasPermission && settings.notifications.desktopNotifications) {
-          const browserNotification = new Notification(notification.title, {
-            body: notification.message,
-            icon: '/logo192.png',
-            tag: notification.id,
-            requireInteraction: signal.priority >= 8,
-          });
-
-          browserNotification.onclick = () => {
-            window.focus();
-            browserNotification.close();
-          };
-
-          if (signal.priority < 8) {
-            setTimeout(() => browserNotification.close(), 5000);
-          }
-        }
-
-        // Handle sound notifications
-        if (settings.notifications.soundEnabled) {
-          const soundType = signal.priority >= 8 ? 'alert' : 'notification';
-          await audioManager.playSound(soundType);
-        }
-      }
+      read: false
     });
+
+    if (this.hasPermission && settings.notifications.desktopNotifications) {
+      const browserNotification = new Notification(notification.title, {
+        body: notification.message,
+        icon: '/logo192.png',
+        tag: notification.id,
+        requireInteraction: signal.priority >= 8,
+      });
+
+      browserNotification.onclick = () => {
+        window.focus();
+        browserNotification.close();
+      };
+
+      if (signal.priority < 8) {
+        setTimeout(() => browserNotification.close(), 5000);
+      }
+    }
+
+    // Play sound if enabled
+    if (settings.notifications.soundEnabled) {
+      const soundType = signal.priority >= 8 ? 'alert' : 'notification';
+      audioManager.playNotification(soundType);
+    }
   }
 
   notifyConnectionStatus(isConnected: boolean) {
@@ -114,21 +115,17 @@ class NotificationService {
 
       notificationQueue.add({
         id: notification.id,
+        title: notification.title,
+        message: notification.message,
+        type: 'error',
+        timestamp: Date.now(),
         priority: 10,
-        execute: async () => {
-          if (this.hasPermission && settings.notifications.desktopNotifications) {
-            new Notification(notification.title, {
-              body: notification.message,
-              icon: '/logo192.png',
-              tag: 'connection-status',
-            });
-          }
-
-          if (settings.notifications.soundEnabled) {
-            await audioManager.playSound('disconnect');
-          }
-        }
+        read: false
       });
+
+      if (settings.notifications.soundEnabled) {
+        audioManager.playNotification('disconnect');
+      }
     } else {
       const notification: StoredNotification = {
         id: `connection-${Date.now()}`,
@@ -140,14 +137,18 @@ class NotificationService {
 
       this.storeNotification(notification);
 
+      notificationQueue.add({
+        id: notification.id,
+        title: notification.title,
+        message: notification.message,
+        type: 'success',
+        timestamp: Date.now(),
+        priority: 9,
+        read: false
+      });
+
       if (settings.notifications.soundEnabled) {
-        notificationQueue.add({
-          id: notification.id,
-          priority: 9,
-          execute: async () => {
-            await audioManager.playSound('connect');
-          }
-        });
+        audioManager.playNotification('connect');
       }
     }
   }
@@ -155,12 +156,13 @@ class NotificationService {
   clearAllNotifications() {
     localStorage.setItem('notifications', '[]');
     localStorage.removeItem('lastNotificationRead');
+    notificationQueue.clear();
   }
 
   cleanup() {
-    audioManager.stopAll();
-    notificationQueue.clear();
+    audioManager.dispose();
   }
 }
 
-export default new NotificationService();
+const notificationService = new NotificationService();
+export default notificationService;

@@ -12,6 +12,36 @@ export interface ProtocolInteraction {
 }
 
 export const pioneerApi = {
+  connectWebSocket: () => {
+    // Implement WebSocket connection logic here
+    const ws = new WebSocket('your-websocket-url');
+    
+    ws.onopen = () => {
+      console.log('WebSocket connection established');
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return ws;
+  },
+
+  addMessageHandler: <T>(event: string, handler: (data: T) => void) => {
+    const ws = pioneerApi.connectWebSocket();
+    ws.addEventListener('message', (message) => {
+      const data = JSON.parse(message.data);
+      if (data.type === event) {
+        handler(data.payload);
+      }
+    });
+  },
+  
+  getSignals: async () => {
+    const response = await axios.get(`${API_BASE_URL}/signals`);
+    return response.data;
+  },
+
   getPioneers: async (filters?: {
     categories?: PioneerCategory[];
     minSuccessRate?: number;

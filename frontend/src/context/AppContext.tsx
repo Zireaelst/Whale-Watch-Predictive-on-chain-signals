@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { Signal, Wallet } from '../types';
-import apiService from '../services/api';
+import { Signal } from '../types';
+import { pioneerApi } from '../services/api';
 import notificationService from '../services/NotificationService';
+
+interface Wallet {
+  address: string;
+  // Add other wallet properties as needed
+}
 
 interface AppState {
   signals: Signal[];
@@ -63,31 +68,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     notificationService.initialize();
 
     // Initialize WebSocket connection
-    apiService.connectWebSocket();
+
 
     // Set up WebSocket event handlers
-    apiService.addMessageHandler('new_signal', (data) => {
-      const signal = data.signal;
+    interface NewSignalData {
+      signal: Signal;
+    }
+
+    pioneerApi.addMessageHandler<NewSignalData>('new_signal', (data: NewSignalData) => {
+      const signal: Signal = data.signal;
       dispatch({ type: 'ADD_SIGNAL', payload: signal });
       notificationService.notifyNewSignal(signal);
     });
 
-    apiService.addMessageHandler('connection_status', (data) => {
-      const isConnected = data.connected;
-      dispatch({ type: 'SET_CONNECTION', payload: isConnected });
-      notificationService.notifyConnectionStatus(isConnected);
-    });
+    interface ConnectionStatusData {
+      connected: boolean;
+    }
+
+        pioneerApi.addMessageHandler<ConnectionStatusData>('connection_status', (data: ConnectionStatusData) => {
+          const isConnected: boolean = data.connected;
+          dispatch({ type: 'SET_CONNECTION', payload: isConnected });
+          notificationService.notifyConnectionStatus(isConnected);
+        });
 
     // Load initial data
     const loadInitialData = async () => {
       try {
-        const [signalsData, walletsData] = await Promise.all([
-          apiService.getSignals(),
-          apiService.getWallets(),
-        ]);
-
+        const signalsData = await pioneerApi.getSignals();
         dispatch({ type: 'SET_SIGNALS', payload: signalsData.signals });
-        dispatch({ type: 'SET_WALLETS', payload: walletsData.wallets });
+        // Initialize with empty wallets array for now
+        dispatch({ type: 'SET_WALLETS', payload: [] });
       } catch (error) {
         dispatch({
           type: 'SET_ERROR',
@@ -100,7 +110,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Cleanup
     return () => {
-      apiService.disconnect();
+      // Close WebSocket connection if it exists
+      const ws = pioneerApi.connectWebSocket();
+      ws.close();
     };
   }, []);
 

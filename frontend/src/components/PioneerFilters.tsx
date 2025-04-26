@@ -3,10 +3,6 @@ import {
   Box,
   Card,
   CardContent,
-  FormControl,
-  FormGroup,
-  FormControlLabel,
-  Checkbox,
   Slider,
   Typography,
   Chip,
@@ -20,8 +16,16 @@ import {
   House,
   AccountBalance
 } from '@mui/icons-material';
+import { PioneerCategory } from '../types';
 
-const categories = [
+interface CategoryConfig {
+  id: PioneerCategory;
+  label: string;
+  icon: typeof Timeline | typeof Assessment | typeof CompareArrows | typeof House | typeof AccountBalance;
+  color: string;
+}
+
+const categories: CategoryConfig[] = [
   {
     id: 'Protocol_Scout',
     label: 'Protocol Scouts',
@@ -65,7 +69,7 @@ const chainsList = [
 export const PioneerFilters: React.FC = () => {
   const { filters, updateFilters } = usePioneer();
 
-  const handleCategoryChange = (categoryId: string) => {
+  const handleCategoryChange = (categoryId: PioneerCategory) => {
     const updatedCategories = filters.categories.includes(categoryId)
       ? filters.categories.filter(id => id !== categoryId)
       : [...filters.categories, categoryId];

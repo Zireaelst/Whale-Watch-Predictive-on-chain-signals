@@ -1,5 +1,45 @@
 import { PioneerSettings } from '../types';
 
+interface NotificationSettings {
+  enabled: boolean;
+  minPriority: number;
+  soundEnabled: boolean;
+  desktopNotifications: boolean;
+}
+
+interface FilterSettings {
+  categories: string[];
+  minSuccessRate: number;
+  chains: string[];
+  protocols: string[];
+}
+
+interface UserSettings {
+  notifications: NotificationSettings;
+  filters: FilterSettings;
+  appearance: {
+    theme: 'light' | 'dark';
+  };
+}
+
+const DEFAULT_SETTINGS: UserSettings = {
+  notifications: {
+    enabled: true,
+    minPriority: 1,
+    soundEnabled: true,
+    desktopNotifications: true
+  },
+  filters: {
+    categories: [],
+    minSuccessRate: 0.65,
+    chains: [],
+    protocols: []
+  },
+  appearance: {
+    theme: 'light'
+  }
+};
+
 const STORAGE_KEYS = {
   GENERAL_SETTINGS: 'whalewatch_settings',
   NOTIFICATION_SETTINGS: 'whalewatch_notifications',
@@ -51,7 +91,10 @@ class SettingsService {
   }
 
   setTheme(theme: 'light' | 'dark') {
-    this.settings.theme = theme;
+    this.settings.appearance = {
+      ...this.settings.appearance,
+      theme
+    };
     this.saveSettings();
   }
 
@@ -192,4 +235,5 @@ class SettingsService {
   }
 }
 
-export default new SettingsService();
+const settingsService = new SettingsService();
+export default settingsService;

@@ -16,18 +16,18 @@ interface NotificationItem {
 class NotificationQueue {
   private queue: NotificationItem[];
   private maxSize: number;
-  private callbacks: ((notification: NotificationItem) => void)[];
+  private callbacks: Set<(notification: NotificationItem) => void>;
 
   constructor(maxSize: number = 100) {
     this.queue = [];
     this.maxSize = maxSize;
-    this.callbacks = [];
+    this.callbacks = new Set();
   }
 
   public subscribe(callback: (notification: NotificationItem) => void) {
-    this.callbacks.push(callback);
+    this.callbacks.add(callback);
     return () => {
-      this.callbacks = this.callbacks.filter(cb => cb !== callback);
+      this.callbacks.delete(callback);
     };
   }
 
@@ -126,6 +126,7 @@ class NotificationQueue {
 
   public clear() {
     this.queue = [];
+    this.callbacks.clear();
   }
 
   public getAll() {

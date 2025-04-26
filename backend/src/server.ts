@@ -6,10 +6,14 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
+import { providers } from 'ethers';
 
 import walletRoutes from './api/wallets';
 import signalRoutes from './api/signals';
-import WalletListener from '../../blockchain/listeners/WalletListener';
+import { WalletListener } from '../../blockchain/listeners/WalletListener';
+import { SignalGenerationService } from './services/SignalGenerationService';
+import { NotificationService } from './services/NotificationService';
+import { telegramBot } from './config/telegram';
 
 dotenv.config();
 
@@ -17,8 +21,13 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Initialize wallet listener with WebSocket server
-const walletListener = new WalletListener(wss);
+// Initialize services
+const provider = new providers.JsonRpcProvider(process.env.ETH_RPC_URL);
+const signalService = new SignalGenerationService();
+const notificationService = new NotificationService(telegramBot);
+
+// Initialize wallet listener with services
+const walletListener = new WalletListener(provider, signalService, notificationService);
 
 // Middleware
 app.use(cors());
@@ -34,12 +43,27 @@ app.use('/api/signals', signalRoutes);
 wss.on('connection', (ws) => {
   console.log('New client connected');
   
+  // Keep track of connection status
+  let isAlive = true;
+  const pingInterval = setInterval(() => {
+    if (!isAlive) {
+      clearInterval(pingInterval);
+      return ws.terminate();
+    }
+    isAlive = false;
+    ws.ping();
+  }, 30000);
+
+  ws.on('pong', () => {
+    isAlive = true;
+  });
+  
   ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message.toString());
       
       if (data.type === 'watch_wallet') {
-        await walletListener.addWalletToWatch(data.address);
+        await walletListener.addWallet(data.address);
         ws.send(JSON.stringify({ 
           type: 'watch_confirmation', 
           address: data.address,
@@ -50,13 +74,19 @@ wss.on('connection', (ws) => {
       console.error('WebSocket message error:', error);
       ws.send(JSON.stringify({ 
         type: 'error', 
-        message: 'Invalid message format'
+        message: error instanceof Error ? error.message : 'Invalid message format'
       }));
     }
   });
 
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+    clearInterval(pingInterval);
+  });
+
   ws.on('close', () => {
     console.log('Client disconnected');
+    clearInterval(pingInterval);
   });
 });
 

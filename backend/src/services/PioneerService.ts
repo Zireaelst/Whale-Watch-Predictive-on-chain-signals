@@ -2,6 +2,7 @@ import { Pioneer, PioneerDoc, PioneerMetrics } from '../models/Pioneer';
 import { Wallet } from '../models/Wallet';
 import { TransactionAnalyzer } from '../../blockchain/utils/TransactionAnalyzer';
 import { ethers } from 'ethers';
+import mongoose from 'mongoose';
 
 export class PioneerService {
   private static readonly PIONEER_THRESHOLDS = {
@@ -13,94 +14,105 @@ export class PioneerService {
   };
 
   static async updatePioneerMetrics(address: string): Promise<PioneerMetrics> {
-    const wallet = await Wallet.findOne({ address: address.toLowerCase() });
-    if (!wallet) throw new Error('Wallet not found');
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    let pioneer = await Pioneer.findOne({ wallet: wallet._id });
-    if (!pioneer) {
-      pioneer = new Pioneer({ wallet: wallet._id });
+    try {
+      const wallet = await Wallet.findOne({ address: address.toLowerCase() }).session(session);
+      if (!wallet) throw new Error('Wallet not found');
+
+      let pioneer = await Pioneer.findOne({ wallet: wallet._id }).session(session);
+      if (!pioneer) {
+        pioneer = new Pioneer({ wallet: wallet._id });
+      }
+
+      // Update early adoption success
+      const earlyAdoptions = pioneer.discoveredProtocols.filter(
+        p => p.timestamp.getTime() <= Date.now() - this.PIONEER_THRESHOLDS.EARLY_ADOPTION_WINDOW
+      );
+      const earlyAdoptionSuccess = earlyAdoptions.length > 0
+        ? earlyAdoptions.filter(p => p.success).length / earlyAdoptions.length
+        : 0;
+
+      // Update yield optimization ROI
+      const yieldStrategies = pioneer.strategyDeployments.filter(
+        s => s.type.includes('yield') || s.type.includes('farming')
+      );
+      const avgROI = yieldStrategies.length > 0
+        ? yieldStrategies.reduce((sum, s) => sum + (s.roi || 0), 0) / yieldStrategies.length
+        : 0;
+
+      // Update cross-chain efficiency
+      const crossChainOps = pioneer.chainActivity.reduce(
+        (sum, activity) => sum + activity.transactionCount,
+        0
+      );
+      const crossChainSuccess = pioneer.chainActivity.reduce(
+        (sum, activity) => sum + (activity.successRate * activity.transactionCount),
+        0
+      );
+      const crossChainEfficiency = crossChainOps > 0
+        ? crossChainSuccess / crossChainOps
+        : 0;
+
+      // Update RWA innovation score
+      const rwaStrategies = pioneer.strategyDeployments.filter(
+        s => s.type.includes('RWA') || s.type.includes('real_world')
+      );
+      const rwaSuccess = rwaStrategies.filter(s => s.success).length;
+      const rwaInnovationScore = rwaStrategies.length > 0
+        ? rwaSuccess / rwaStrategies.length
+        : 0;
+
+      // Update treasury management score
+      const treasuryOps = pioneer.strategyDeployments.filter(
+        s => s.type.includes('treasury') || s.type.includes('governance')
+      );
+      const treasurySuccess = treasuryOps.filter(s => s.success).length;
+      const treasuryManagementScore = treasuryOps.length > 0
+        ? treasurySuccess / treasuryOps.length
+        : 0;
+
+      // Update overall metrics
+      const metrics: PioneerMetrics = {
+        earlyAdoptionSuccess,
+        yieldOptimizationROI: avgROI,
+        crossChainEfficiency,
+        rwaInnovationScore,
+        treasuryManagementScore,
+        successRate: wallet.successRate,
+        totalTransactions: wallet.totalTransactions
+      };
+
+      pioneer.metrics = metrics;
+
+      // Update categories based on metrics
+      pioneer.categories = [];
+      if (earlyAdoptionSuccess >= this.PIONEER_THRESHOLDS.MIN_SUCCESS_RATE) {
+        pioneer.categories.push('Protocol_Scout');
+      }
+      if (avgROI >= this.PIONEER_THRESHOLDS.YIELD_OUTPERFORM_THRESHOLD) {
+        pioneer.categories.push('Yield_Opportunist');
+      }
+      if (crossChainEfficiency >= this.PIONEER_THRESHOLDS.MIN_SUCCESS_RATE) {
+        pioneer.categories.push('Cross_Chain_Arbitrage');
+      }
+      if (rwaInnovationScore >= this.PIONEER_THRESHOLDS.MIN_SUCCESS_RATE) {
+        pioneer.categories.push('RWA_Innovation');
+      }
+      if (treasuryManagementScore >= this.PIONEER_THRESHOLDS.MIN_SUCCESS_RATE) {
+        pioneer.categories.push('Treasury_Management');
+      }
+
+      await pioneer.save({ session });
+      await session.commitTransaction();
+      return metrics;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
-
-    // Update early adoption success
-    const earlyAdoptions = pioneer.discoveredProtocols.filter(
-      p => p.timestamp.getTime() <= Date.now() - this.PIONEER_THRESHOLDS.EARLY_ADOPTION_WINDOW
-    );
-    const earlyAdoptionSuccess = earlyAdoptions.length > 0
-      ? earlyAdoptions.filter(p => p.success).length / earlyAdoptions.length
-      : 0;
-
-    // Update yield optimization ROI
-    const yieldStrategies = pioneer.strategyDeployments.filter(
-      s => s.type.includes('yield') || s.type.includes('farming')
-    );
-    const avgROI = yieldStrategies.length > 0
-      ? yieldStrategies.reduce((sum, s) => sum + (s.roi || 0), 0) / yieldStrategies.length
-      : 0;
-
-    // Update cross-chain efficiency
-    const crossChainOps = pioneer.chainActivity.reduce(
-      (sum, activity) => sum + activity.transactionCount,
-      0
-    );
-    const crossChainSuccess = pioneer.chainActivity.reduce(
-      (sum, activity) => sum + (activity.successRate * activity.transactionCount),
-      0
-    );
-    const crossChainEfficiency = crossChainOps > 0
-      ? crossChainSuccess / crossChainOps
-      : 0;
-
-    // Update RWA innovation score
-    const rwaStrategies = pioneer.strategyDeployments.filter(
-      s => s.type.includes('RWA') || s.type.includes('real_world')
-    );
-    const rwaSuccess = rwaStrategies.filter(s => s.success).length;
-    const rwaInnovationScore = rwaStrategies.length > 0
-      ? rwaSuccess / rwaStrategies.length
-      : 0;
-
-    // Update treasury management score
-    const treasuryOps = pioneer.strategyDeployments.filter(
-      s => s.type.includes('treasury') || s.type.includes('governance')
-    );
-    const treasurySuccess = treasuryOps.filter(s => s.success).length;
-    const treasuryManagementScore = treasuryOps.length > 0
-      ? treasurySuccess / treasuryOps.length
-      : 0;
-
-    // Update overall metrics
-    const metrics: PioneerMetrics = {
-      earlyAdoptionSuccess,
-      yieldOptimizationROI: avgROI,
-      crossChainEfficiency,
-      rwaInnovationScore,
-      treasuryManagementScore,
-      successRate: wallet.successRate,
-      totalTransactions: wallet.totalTransactions
-    };
-
-    pioneer.metrics = metrics;
-
-    // Update categories based on metrics
-    pioneer.categories = [];
-    if (earlyAdoptionSuccess >= this.PIONEER_THRESHOLDS.MIN_SUCCESS_RATE) {
-      pioneer.categories.push('Protocol_Scout');
-    }
-    if (avgROI >= this.PIONEER_THRESHOLDS.YIELD_OUTPERFORM_THRESHOLD) {
-      pioneer.categories.push('Yield_Opportunist');
-    }
-    if (crossChainEfficiency >= this.PIONEER_THRESHOLDS.MIN_SUCCESS_RATE) {
-      pioneer.categories.push('Cross_Chain_Arbitrage');
-    }
-    if (rwaInnovationScore >= this.PIONEER_THRESHOLDS.MIN_SUCCESS_RATE) {
-      pioneer.categories.push('RWA_Innovation');
-    }
-    if (treasuryManagementScore >= this.PIONEER_THRESHOLDS.MIN_SUCCESS_RATE) {
-      pioneer.categories.push('Treasury_Management');
-    }
-
-    await pioneer.save();
-    return metrics;
   }
 
   static async recordProtocolDiscovery(

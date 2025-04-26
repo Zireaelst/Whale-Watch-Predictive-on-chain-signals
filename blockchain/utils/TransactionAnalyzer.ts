@@ -1,5 +1,5 @@
-import { ethers } from 'ethers';
-import { PioneerService } from '../../backend/src/services/PioneerService';
+import { providers, utils, BigNumber } from 'ethers';
+import type { Log } from '@ethersproject/abstract-provider';
 
 interface PioneerPattern {
   type: string;
@@ -8,7 +8,27 @@ interface PioneerPattern {
   category: string;
 }
 
+export interface AnalyzedTransaction {
+  type: string;
+  confidence: number;
+  protocol?: string;
+  pattern?: string;
+  value: string;
+  significance: number;
+}
+
 export class TransactionAnalyzer {
+  private static readonly PATTERN_SIGNATURES: { [key: string]: string[] } = {
+    'flash_loan': ['flashLoan', 'flash'],
+    'swap': ['swap', 'exchange'],
+    'borrow': ['borrow', 'borrowFrom'],
+    'leverage': ['leverage', 'enterPosition'],
+    'bridge': ['bridge', 'send', 'deposit'],
+    'stake': ['stake', 'deposit'],
+    'farm': ['farm', 'harvest'],
+    'yield': ['yield', 'compound']
+  };
+
   private static readonly KNOWN_PROTOCOLS: { [key: string]: string[] } = {
     // DEX Protocols
     'uniswap': [
@@ -128,8 +148,8 @@ export class TransactionAnalyzer {
   };
 
   public static async analyzeTransaction(
-    tx: TransactionResponse,
-    receipt?: TransactionReceipt
+    tx: providers.TransactionResponse,
+    receipt?: providers.TransactionReceipt
   ): Promise<AnalyzedTransaction> {
     const protocol = this.detectProtocol(tx.to);
     const methodSignature = tx.data.slice(0, 10);
@@ -146,7 +166,7 @@ export class TransactionAnalyzer {
     };
   }
 
-  private static detectProtocol(address?: string): string | undefined {
+  public static detectProtocol(address?: string): string | undefined {
     if (!address) return undefined;
     
     const lowercaseAddress = address.toLowerCase();
@@ -160,7 +180,7 @@ export class TransactionAnalyzer {
 
   private static detectPattern(methodSig: string, data: string): string | undefined {
     for (const [pattern, signatures] of Object.entries(this.PATTERN_SIGNATURES)) {
-      if (signatures.some(sig => data.includes(ethers.utils.id(sig).slice(0, 10)))) {
+      if (signatures.some((sig: string) => data.includes(utils.id(sig).slice(0, 10)))) {
         return pattern;
       }
     }
@@ -168,15 +188,15 @@ export class TransactionAnalyzer {
   }
 
   private static calculateSignificance(
-    tx: TransactionResponse,
-    receipt?: TransactionReceipt
+    tx: providers.TransactionResponse,
+    receipt?: providers.TransactionReceipt
   ): number {
     let significance = 0;
 
     // Value-based significance
-    if (tx.value.gt(ethers.utils.parseEther('10'))) {
+    if (tx.value.gt(utils.parseEther('10'))) {
       significance += 2;
-    } else if (tx.value.gt(ethers.utils.parseEther('1'))) {
+    } else if (tx.value.gt(utils.parseEther('1'))) {
       significance += 1;
     }
 
@@ -189,15 +209,15 @@ export class TransactionAnalyzer {
     }
 
     // Gas-based significance
-    if (receipt && receipt.gasUsed.gt(ethers.BigNumber.from('500000'))) {
+    if (receipt && receipt.gasUsed.gt(BigNumber.from('500000'))) {
       significance += 1;
     }
 
-    return Math.min(significance, 5); // Cap at 5
+    return Math.min(significance, 5);
   }
 
   private static calculateConfidence(
-    tx: TransactionResponse,
+    tx: providers.TransactionResponse,
     pattern?: string,
     protocol?: string
   ): number {
@@ -217,7 +237,7 @@ export class TransactionAnalyzer {
   }
 
   private static determineTransactionType(
-    tx: TransactionResponse,
+    tx: providers.TransactionResponse,
     pattern?: string
   ): string {
     if (pattern) {
@@ -229,10 +249,10 @@ export class TransactionAnalyzer {
     return 'contract_interaction';
   }
 
-  private static async analyzeProtocolInteraction(
-    tx: TransactionResponse,
-    receipt?: TransactionReceipt
-  ) {
+  public static async analyzeProtocolInteraction(
+    tx: providers.TransactionResponse,
+    receipt?: providers.TransactionReceipt
+  ): Promise<string[]> {
     const protocolsUsed = new Set<string>();
     
     // Check direct protocol interaction
@@ -253,8 +273,8 @@ export class TransactionAnalyzer {
   }
 
   private static detectComplexStrategy(
-    tx: TransactionResponse,
-    receipt?: TransactionReceipt
+    tx: providers.TransactionResponse,
+    receipt?: providers.TransactionReceipt
   ): string | undefined {
     if (!receipt) return undefined;
     
@@ -270,13 +290,13 @@ export class TransactionAnalyzer {
     
     // Detect complex strategies
     if (uniqueContracts.size >= 3 && uniqueSignatures.size >= 2) {
-      if (this.hasPatternSignatures(['flash_loan', 'swap'])) {
+      if (this.hasPatternSignatures(['flash_loan', 'swap'], tx)) {
         return 'flash_loan_arbitrage';
       }
-      if (this.hasPatternSignatures(['borrow', 'leverage'])) {
+      if (this.hasPatternSignatures(['borrow', 'leverage'], tx)) {
         return 'leveraged_yield_farming';
       }
-      if (this.hasPatternSignatures(['bridge', 'swap'])) {
+      if (this.hasPatternSignatures(['bridge', 'swap'], tx)) {
         return 'cross_chain_arbitrage';
       }
     }
@@ -284,17 +304,18 @@ export class TransactionAnalyzer {
     return undefined;
   }
   
-  private static hasPatternSignatures(patterns: string[]): boolean {
-    return patterns.every(pattern => 
-      this.PATTERN_SIGNATURES[pattern]?.some(sig => 
-        tx.data.includes(ethers.utils.id(sig).slice(0, 10))
-      )
-    );
+  private static hasPatternSignatures(patterns: string[], tx: providers.TransactionResponse): boolean {
+    return patterns.every(pattern => {
+      const signatures = this.PATTERN_SIGNATURES[pattern];
+      return signatures?.some((sig: string) => 
+        tx.data.includes(utils.id(sig).slice(0, 10))
+      ) ?? false;
+    });
   }
 
   static async analyzePioneerPattern(
-    tx: ethers.Transaction,
-    receipt?: ethers.TransactionReceipt
+    tx: providers.TransactionResponse,
+    receipt?: providers.TransactionReceipt
   ): Promise<PioneerPattern | null> {
     if (!tx || !receipt) return null;
 
@@ -351,13 +372,15 @@ export class TransactionAnalyzer {
     return null;
   }
 
-  private static async isNewProtocolInteraction(address: string): Promise<boolean> {
+  private static async isNewProtocolInteraction(address: string | undefined): Promise<boolean> {
+    if (!address) return false;
     // Implementation would check if this protocol address is new
     // or has low TVL/user count
     return false;
   }
 
-  private static isBridgeContract(address: string): boolean {
+  private static isBridgeContract(address: string | undefined): boolean {
+    if (!address) return false;
     // Known bridge contract addresses
     const bridgeAddresses = [
       '0x8315177ab297ba92a06054ce80a67ed4dbd7ed3a', // Arbitrum
@@ -367,27 +390,26 @@ export class TransactionAnalyzer {
     return bridgeAddresses.includes(address.toLowerCase());
   }
 
-  private static isSwapEvent(log: ethers.Log): boolean {
+  private static isSwapEvent(log: Log): boolean {
     // Common DEX swap event signatures
     const swapEventSignatures = [
-      ethers.utils.id('Swap(address,uint256,uint256,uint256,uint256,address)'),
-      ethers.utils.id('TokenExchange(address,uint256,uint256,uint256,uint256)'),
-      // Add more swap event signatures
+      utils.id('Swap(address,uint256,uint256,uint256,uint256,address)'),
+      utils.id('TokenExchange(address,uint256,uint256,uint256,uint256)')
     ];
     return swapEventSignatures.includes(log.topics[0]);
   }
 
-  private static isRWAProtocol(address: string): boolean {
+  private static isRWAProtocol(address: string | undefined): boolean {
+    if (!address) return false;
     // Known RWA protocol addresses
     const rwaProtocols = [
       '0x8481a6ebaf5c7dabc3f7e09e44a89531fd31f822', // Goldfinch
       '0x4abbf7f193460d611eb431373ee84ac9abbd4d96', // Centrifuge
-      // Add more RWA protocol addresses
     ];
     return rwaProtocols.includes(address.toLowerCase());
   }
 
-  private static isTreasuryOperation(tx: ethers.Transaction): boolean {
+  private static isTreasuryOperation(tx: providers.TransactionResponse): boolean {
     // Known treasury operation signatures
     const treasuryOperationSigs = [
       '0x6e553f65', // rebalance()

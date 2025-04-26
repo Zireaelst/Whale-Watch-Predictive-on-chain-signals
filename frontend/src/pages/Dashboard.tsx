@@ -1,17 +1,11 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Grid,
-  Paper,
-  Tab,
-  Tabs,
-  Typography,
-  Container
-} from '@mui/material';
+import { Container, Box, Paper, Tab, Tabs, Grid } from '@mui/material';
 import { PioneerList } from '../components/PioneerList';
 import { PioneerSignalList } from '../components/PioneerSignalList';
-import { SignalList } from '../components/SignalList';
+import SignalList from '../components/SignalList';
 import { PioneerProvider } from '../context/PioneerContext';
+import { Signal } from '../types';
+import { useApp } from '../context/AppContext';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -48,9 +42,15 @@ const a11yProps = (index: number) => {
 
 export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
+  const { state } = useApp();
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
+  };
+
+  const handleSignalClick = (signal: Signal) => {
+    // Handle signal click - you can implement this based on your requirements
+    console.log('Signal clicked:', signal);
   };
 
   return (
@@ -88,7 +88,7 @@ export const Dashboard: React.FC = () => {
             <TabPanel value={activeTab} index={2}>
               <Grid container spacing={3}>
                 <Grid item xs={12}>
-                  <SignalList />
+                  <SignalList signals={state.signals} onSignalClick={handleSignalClick} />
                 </Grid>
               </Grid>
             </TabPanel>

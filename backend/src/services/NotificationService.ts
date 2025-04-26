@@ -110,6 +110,41 @@ ${notification.message}
       this.webhookCallbacks.splice(index, 1);
     }
   }
+
+  public async sendProtocolPatternNotification(data: {
+    protocolName: string;
+    protocolAddress: string;
+    pattern: string;
+    message: string;
+    severity: 'info' | 'medium' | 'high';
+    timestamp: Date;
+  }): Promise<void> {
+    const emoji = this.getSeverityEmoji(data.severity);
+    const formattedMessage = `
+${emoji} *Protocol Pattern Detected*
+Protocol: ${data.protocolName}
+Pattern: ${data.pattern}
+${data.message}
+
+🔗 [View Protocol](https://etherscan.io/address/${data.protocolAddress})
+    `.trim();
+
+    await this.telegramBot.sendMessage(formattedMessage, {
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true
+    });
+  }
+
+  private getSeverityEmoji(severity: string): string {
+    switch (severity) {
+      case 'high':
+        return '🚨';
+      case 'medium':
+        return '⚠️';
+      default:
+        return 'ℹ️';
+    }
+  }
 }
 
 export default NotificationService;

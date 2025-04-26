@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ThemeProvider, createTheme, Theme } from '@mui/material';
 import settingsService from '../services/SettingsService';
-import { getUserFriendlyError } from '../utils/errorHandler';
+import { ErrorHandler } from '../utils/errorHandler';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 type ThemeMode = 'light' | 'dark';
@@ -38,8 +38,8 @@ export function AppThemeProvider({ children }: ThemeProviderProps) {
         const settings = await settingsService.getSettings();
         setThemeMode(settings.appearance.theme);
       } catch (err) {
-        const errorMessage = getUserFriendlyError(err);
-        setError(errorMessage);
+        const errorDetails = ErrorHandler.handleError(err as Error);
+        setError(errorDetails.message);
         // Default to light theme if there's an error
         setThemeMode('light');
       } finally {
@@ -94,10 +94,10 @@ export function AppThemeProvider({ children }: ThemeProviderProps) {
       });
       setThemeMode(newMode);
     } catch (err) {
-      const errorMessage = getUserFriendlyError(err);
-      setError(errorMessage);
+      const errorDetails = ErrorHandler.handleError(err as Error);
+      setError(errorDetails.message);
       // Show error in UI (you could use a snackbar or other notification)
-      console.error('Failed to update theme:', errorMessage);
+      console.error('Failed to update theme:', errorDetails.message);
     }
   };
 

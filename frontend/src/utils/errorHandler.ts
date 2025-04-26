@@ -6,7 +6,7 @@ interface ErrorDetails {
   context?: Record<string, any>;
 }
 
-class ErrorHandler {
+export class ErrorHandler {
   private static readonly ERROR_MESSAGES = {
     // Pioneer-specific error codes
     PIONEER_NOT_FOUND: 'Pioneer wallet not found',

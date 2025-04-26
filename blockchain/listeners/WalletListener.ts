@@ -1,28 +1,42 @@
-import { ethers } from 'ethers';
+import { providers } from 'ethers';
+import { Block } from '@ethersproject/abstract-provider';
 import { TransactionAnalyzer } from '../utils/TransactionAnalyzer';
 import { PioneerService } from '../../backend/src/services/PioneerService';
 import { SignalGenerationService } from '../../backend/src/services/SignalGenerationService';
 import { NotificationService } from '../../backend/src/services/NotificationService';
 
 export class WalletListener {
-  private provider: ethers.providers.Provider;
-  private trackedWallets: Set<string>;
+  private provider: providers.Provider;
+  private trackedWallets: Map<string, { lastActive: number }>;
   private signalService: SignalGenerationService;
   private notificationService: NotificationService;
+  private cleanupInterval: NodeJS.Timeout;
+  private readonly CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly STALE_THRESHOLD = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   constructor(
-    provider: ethers.providers.Provider,
+    provider: providers.Provider,
     signalService: SignalGenerationService,
     notificationService: NotificationService
   ) {
     this.provider = provider;
-    this.trackedWallets = new Set();
+    this.trackedWallets = new Map();
     this.signalService = signalService;
     this.notificationService = notificationService;
+    this.cleanupInterval = setInterval(() => this.cleanupStaleWallets(), this.CLEANUP_INTERVAL);
+  }
+
+  private cleanupStaleWallets() {
+    const now = Date.now();
+    for (const [address, data] of this.trackedWallets.entries()) {
+      if (now - data.lastActive > this.STALE_THRESHOLD) {
+        this.trackedWallets.delete(address);
+      }
+    }
   }
 
   public addWallet(address: string): void {
-    this.trackedWallets.add(address.toLowerCase());
+    this.trackedWallets.set(address.toLowerCase(), { lastActive: Date.now() });
   }
 
   public removeWallet(address: string): void {
@@ -40,7 +54,7 @@ export class WalletListener {
     });
   }
 
-  private async processBlock(block: ethers.providers.Block): Promise<void> {
+  private async processBlock(block: Block): Promise<void> {
     for (const txHash of block.transactions) {
       try {
         const tx = await this.provider.getTransaction(txHash);
@@ -49,9 +63,8 @@ export class WalletListener {
         if (!tx || !tx.from || !tx.to) continue;
 
         const fromAddress = tx.from.toLowerCase();
-        const toAddress = tx.to.toLowerCase();
-
         if (this.trackedWallets.has(fromAddress)) {
+          this.trackedWallets.set(fromAddress, { lastActive: Date.now() });
           await this.analyzePioneerTransaction(tx, receipt, fromAddress);
         }
       } catch (error) {
@@ -61,8 +74,8 @@ export class WalletListener {
   }
 
   private async analyzePioneerTransaction(
-    tx: ethers.providers.TransactionResponse,
-    receipt: ethers.providers.TransactionReceipt,
+    tx: providers.TransactionResponse,
+    receipt: providers.TransactionReceipt,
     pioneerAddress: string
   ): Promise<void> {
     // Analyze the transaction for pioneer patterns
@@ -71,11 +84,12 @@ export class WalletListener {
 
     // Record protocol discovery if it's an early adoption pattern
     if (pioneerPattern.category === 'Protocol_Scout') {
-      const protocol = TransactionAnalyzer.detectProtocol(tx.to);
-      if (protocol) {
+      // Call the public method instead of the private one
+      const protocol = await TransactionAnalyzer.analyzeProtocolInteraction(tx, receipt);
+      if (protocol.length > 0) {
         await PioneerService.recordProtocolDiscovery(
           pioneerAddress,
-          protocol,
+          protocol[0],
           receipt.status === 1
         );
       }
@@ -93,10 +107,10 @@ export class WalletListener {
 
     // Record cross-chain activity
     if (pioneerPattern.category === 'Cross_Chain_Arbitrage') {
-      const chainId = await this.provider.getNetwork().then(n => n.chainId);
+      const network = await this.provider.getNetwork();
       await PioneerService.updateChainActivity(
         pioneerAddress,
-        chainId.toString(),
+        network.chainId.toString(),
         receipt.status === 1
       );
     }
@@ -135,6 +149,9 @@ export class WalletListener {
   }
 
   public stop(): void {
+    if (this.cleanupInterval) {
+      clearTimeout(this.cleanupInterval);
+    }
     this.provider.removeAllListeners('block');
   }
 }

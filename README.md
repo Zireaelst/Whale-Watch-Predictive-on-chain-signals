@@ -6,112 +6,110 @@ A comprehensive system for tracking, analyzing, and generating signals from on-c
 
 DeFi Pioneer Watch is an advanced blockchain analytics platform that:
 - Monitors successful DeFi wallets across multiple chains
-- Analyzes transaction patterns and strategies
+- Analyzes transaction patterns and strategies using AI-powered pattern recognition
 - Generates real-time signals based on wallet activities
-- Provides a dashboard for tracking and visualizing smart money movements
+- Provides a comprehensive dashboard for tracking and visualizing smart money movements
+- Features an advanced notification system with customizable alerts
 
 ## Technical Stack
 
 ### Backend
 - Node.js with Express
+- TypeScript for type safety
 - MongoDB for flexible data storage
 - WebSocket for real-time updates
+- Ethers.js for blockchain interaction
 
 ### Frontend
-- React.js
-- Chart.js for data visualization
-- Material-UI for components
+- React.js with TypeScript
+- Real-time data visualization
+- Material-UI components
+- WebSocket integration for live updates
+- Keyboard shortcuts support
+- Customizable themes (light/dark mode)
 
 ### Blockchain Integration
-- Ethers.js for blockchain interaction
-- Support for multiple EVM chains:
+- Multi-chain support via Ethers.js
+- Support for EVM-compatible chains:
   - Ethereum
   - Polygon
   - Arbitrum
   - Optimism
 
-### Data Sources
-- RPC Nodes (Infura/Alchemy)
-- The Graph Protocol
-- Dune Analytics
+### Features
 
-## Project Structure
-
-```
-/
-├── backend/                # Backend server
-│   ├── src/
-│   │   ├── services/      # Core services
-│   │   ├── models/        # Database models
-│   │   └── api/           # API routes
-│   └── tests/             # Backend tests
-├── frontend/              # React frontend
-│   ├── src/
-│   │   ├── components/    # React components
-│   │   ├── pages/        # Page components
-│   │   └── services/     # Frontend services
-│   └── tests/            # Frontend tests
-├── blockchain/           # Blockchain integration
-│   ├── listeners/        # Event listeners
-│   └── utils/           # Blockchain utilities
-└── docs/                # Documentation
-```
-
-## Features
-
-### Wallet Monitoring
-- Real-time transaction tracking
-- Pattern recognition
+#### Pioneer Tracking
+- Real-time transaction monitoring
+- AI-powered pattern recognition
 - Strategy classification
+- Success rate calculation
+- Cross-chain activity tracking
 
-### Signal Generation
+#### Signal Generation
 - Transaction pattern analysis
 - Smart money movement detection
 - Protocol interaction tracking
+- Pioneer category classification:
+  - Protocol Scout
+  - Yield Opportunist
+  - Cross-Chain Arbitrage
+  - RWA Innovation
 
-### Dashboard
+#### Dashboard Features
 - Real-time signal display
-- Wallet performance metrics
-- Transaction visualization
+- Pioneer metrics visualization
+- Transaction analysis
+- Customizable filters
+- Performance analytics
 
-### Notification System
+#### Advanced Notification System
 - Telegram bot integration
-- Email notifications
-- Social media updates
+- Desktop notifications
+- Sound alerts
+- Priority-based notification queue
+- Customizable notification settings
 
 ## Setup Instructions
 
 1. Clone the repository
-```bash
-git clone https://github.com/yourusername/defi-pioneer-watch.git
-cd defi-pioneer-watch
-```
+\`\`\`bash
+git clone https://github.com/yourusername/whale-watch-predictive-on-chain-signals.git
+cd whale-watch-predictive-on-chain-signals
+\`\`\`
 
-2. Install dependencies
-```bash
+2. Install dependencies for all components
+\`\`\`bash
 # Backend
 cd backend
 npm install
 
 # Frontend
-cd frontend
+cd ../frontend
 npm install
-```
+
+# Blockchain
+cd ../blockchain
+npm install
+\`\`\`
 
 3. Configure environment variables
-```bash
-# Backend .env
+
+Create a .env file in the backend directory:
+\`\`\`
 PORT=3000
 MONGODB_URI=your_mongodb_uri
-RPC_URL=your_rpc_url
+ETH_RPC_URL=your_ethereum_rpc_url
 TELEGRAM_BOT_TOKEN=your_bot_token
+\`\`\`
 
-# Frontend .env
+Create a .env file in the frontend directory:
+\`\`\`
 REACT_APP_API_URL=http://localhost:3000
-```
+REACT_APP_WS_URL=ws://localhost:3000
+\`\`\`
 
 4. Start the development servers
-```bash
+\`\`\`bash
 # Backend
 cd backend
 npm run dev
@@ -119,7 +117,31 @@ npm run dev
 # Frontend
 cd frontend
 npm start
-```
+\`\`\`
+
+## Development
+
+### Running Tests
+\`\`\`bash
+# Backend tests
+cd backend
+npm test
+
+# Frontend tests
+cd frontend
+npm test
+\`\`\`
+
+### Building for Production
+\`\`\`bash
+# Backend
+cd backend
+npm run build
+
+# Frontend
+cd frontend
+npm run build
+\`\`\`
 
 ## Contributing
 
@@ -131,4 +153,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-For questions and support, please open an issue or contact the maintainers.
+For questions and support, please open an issue in the GitHub repository.

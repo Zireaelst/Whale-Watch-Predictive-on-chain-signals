@@ -3,20 +3,23 @@
     "target": "es2020",
     "module": "commonjs",
     "lib": ["es2020"],
-    "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "baseUrl": ".",
+    "outDir": "./dist",
+    "rootDir": "../",
+    "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"],
       "@blockchain/*": ["../blockchain/*"]
     }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "include": [
+    "src/**/*",
+    "../blockchain/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

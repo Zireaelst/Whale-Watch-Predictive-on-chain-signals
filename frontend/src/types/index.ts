@@ -5,6 +5,20 @@ export type PioneerCategory =
   | 'RWA_Innovation'
   | 'Treasury_Management';
 
+export interface Signal {
+  id: string;
+  type: string;
+  priority: number;
+  timestamp: string;
+  protocol: string;
+  chain: string;
+  pattern: {
+    name: string;
+    confidence: number;
+  };
+  walletAddress: string;
+}
+
 export interface PioneerMetrics {
   earlyAdoptionSuccess: number;
   yieldOptimizationROI: number;
@@ -93,4 +107,14 @@ export interface PioneerContextType {
   updateSettings: (settings: Partial<PioneerSettings>) => void;
   addPioneer: (address: string) => Promise<void>;
   removePioneer: (address: string) => Promise<void>;
+}
+
+export interface KeyboardShortcut {
+  key: string;
+  description: string;
+  category: string;
+  action?: () => void;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
 }

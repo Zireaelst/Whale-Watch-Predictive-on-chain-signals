@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { pioneerApi } from '../services/api';
-import { SettingsService } from '../services/SettingsService';
+import settingsService from '../services/SettingsService';
 import { ErrorHandler } from '../utils/errorHandler';
 import { notificationQueue } from '../utils/NotificationQueue';
 import {
@@ -28,26 +28,26 @@ interface PioneerProviderProps {
 export const PioneerProvider: React.FC<PioneerProviderProps> = ({ children }) => {
   const [activePioneers, setActivePioneers] = useState<string[]>([]);
   const [pioneerMetrics, setPioneerMetrics] = useState<Record<string, PioneerMetrics>>({});
-  const [filters, setFilters] = useState<PioneerFilters>(SettingsService.getPioneerFilters());
-  const [settings, setSettings] = useState<PioneerSettings>(SettingsService.getPioneerSettings());
+  const [filters, setFilters] = useState<PioneerFilters>(settingsService.getPioneerFilters());
+  const [settings, setSettings] = useState<PioneerSettings>(settingsService.getPioneerSettings());
 
-  const updateFilters = useCallback((newFilters: Partial<PioneerFilters>) => {
+  const updateFilters = (newFilters: Partial<PioneerFilters>) => {
     setFilters(current => {
       const updated = { ...current, ...newFilters };
-      SettingsService.savePioneerFilters(updated);
+      settingsService.savePioneerFilters(updated);
       return updated;
     });
-  }, []);
+  };
 
-  const updateSettings = useCallback((newSettings: Partial<PioneerSettings>) => {
+  const updateSettings = (newSettings: Partial<PioneerSettings>) => {
     setSettings(current => {
       const updated = { ...current, ...newSettings };
-      SettingsService.savePioneerSettings(updated);
+      settingsService.savePioneerSettings(updated);
       return updated;
     });
-  }, []);
+  };
 
-  const addPioneer = useCallback(async (address: string) => {
+  const addPioneer = async (address: string) => {
     try {
       // Verify the address meets minimum requirements
       const metrics = await pioneerApi.getPioneerMetrics(address);
@@ -94,9 +94,9 @@ export const PioneerProvider: React.FC<PioneerProviderProps> = ({ children }) =>
       ErrorHandler.handlePioneerError(error as Error, { address });
       throw error;
     }
-  }, [settings]);
+  };
 
-  const removePioneer = useCallback(async (address: string) => {
+  const removePioneer = async (address: string) => {
     try {
       setActivePioneers(current => 
         current.filter(a => a !== address)
@@ -130,7 +130,7 @@ export const PioneerProvider: React.FC<PioneerProviderProps> = ({ children }) =>
       ErrorHandler.handlePioneerError(error as Error, { address });
       throw error;
     }
-  }, []);
+  };
 
   // Load saved pioneers on mount
   useEffect(() => {
